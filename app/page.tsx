@@ -6,10 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   RefreshCw,
-  Phone,
   MessageCircle,
-  Clock,
-  User,
   Users,
   TrendingUp,
   TrendingDown,
@@ -35,7 +32,9 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
-// Remover imports de ChartContainer, ChartTooltipContent, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 interface Mensagem {
   hora: string
@@ -56,8 +55,6 @@ interface Atendimento {
 }
 
 const ITEMS_PER_PAGE_DEFAULT = 10
-
-// Remover dados de exemplo para o gráfico de Google Ads
 
 export default function AtendimentosPage() {
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([])
@@ -183,8 +180,8 @@ export default function AtendimentosPage() {
       formatDate(item.data_inicio),
       formatDate(item.data_fim),
       `"${item.mensagem_limpa.replace(/"/g, '""')}"`, // Escape quotes for CSV
-      formatDate(item.criado_em),
       `"${JSON.stringify(item.mensagens).replace(/"/g, '""')}"`, // Stringify and escape messages
+      formatDate(item.criado_em),
     ])
 
     const csvContent = [headers.join(","), ...rows.map((e) => e.join(","))].join("\n")
@@ -428,65 +425,74 @@ export default function AtendimentosPage() {
           </Card>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {currentItems.map((atendimento) => (
-                <Card
-                  key={atendimento.id}
-                  className="bg-white shadow-sm hover:shadow-md transition-shadow duration-200 dark:bg-gray-800 dark:text-gray-50 dark:border-gray-700"
-                >
-                  <CardHeader className="p-4 pb-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                        <CardTitle className="text-lg font-semibold">
-                          {atendimento.nome || "Nome Indisponível"}
-                        </CardTitle>
-                      </div>
-                      <Badge className={getStatusColor(atendimento.status)}>{atendimento.status}</Badge>
-                    </div>
-                    <div className="flex items-center gap-1 text-sm text-gray-600 mt-1 dark:text-gray-400">
-                      <Phone className="h-3 w-3 text-gray-500 dark:text-gray-500" />
-                      <span>{atendimento.telefone}</span>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="p-4 pt-2">
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                        <Clock className="h-3 w-3 text-gray-500 dark:text-gray-500" />
-                        <span className="text-gray-600 dark:text-gray-400">Início:</span>{" "}
-                        <span className="font-medium">{formatDate(atendimento.data_inicio)}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                        <MessageCircle className="h-3 w-3 text-gray-500 dark:text-gray-500" />
-                        <span className="text-gray-600 dark:text-gray-400">Mensagem:</span>{" "}
-                        <p className="text-gray-700 flex-1 overflow-hidden text-ellipsis whitespace-nowrap dark:text-gray-300">
-                          {atendimento.mensagem_limpa || "Mensagem não disponível"}
-                        </p>
-                      </div>
-                    </div>
-                    {atendimento.mensagens && atendimento.mensagens.length > 0 && (
-                      <div className="mt-4">
-                        <h4 className="font-medium text-gray-900 mb-2 text-sm dark:text-gray-50">
-                          Histórico ({atendimento.mensagens.length})
-                        </h4>
-                        <div className="space-y-1 max-h-28 overflow-y-auto border rounded-md p-2 bg-gray-50 dark:bg-gray-900 dark:border-gray-700 text-xs">
-                          {atendimento.mensagens.map((msg, index) => (
-                            <div
-                              key={index}
-                              className="bg-white border rounded-lg p-2 dark:bg-gray-800 dark:border-gray-700"
-                            >
-                              <div className="flex justify-between items-center mb-0.5">
-                                <span className="text-xs text-gray-500 dark:text-gray-400">{msg.hora}</span>
-                              </div>
-                              <p className="text-xs text-gray-700 dark:text-gray-300">{msg.conteudo}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
+            <div className="overflow-x-auto rounded-md border dark:border-gray-700">
+              <Table className="w-full">
+                <TableHeader className="bg-gray-100 dark:bg-gray-800">
+                  <TableRow>
+                    <TableHead className="w-[80px] text-gray-700 dark:text-gray-300">ID</TableHead>
+                    <TableHead className="text-gray-700 dark:text-gray-300">Nome</TableHead>
+                    <TableHead className="text-gray-700 dark:text-gray-300">Telefone</TableHead>
+                    <TableHead className="text-gray-700 dark:text-gray-300">Status</TableHead>
+                    <TableHead className="text-gray-700 dark:text-gray-300">Mensagem Principal</TableHead>
+                    <TableHead className="text-gray-700 dark:text-gray-300">Início</TableHead>
+                    <TableHead className="text-gray-700 dark:text-gray-300">Histórico</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="bg-white dark:bg-gray-900">
+                  {currentItems.map((atendimento) => (
+                    <TableRow key={atendimento.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <TableCell className="font-medium text-gray-900 dark:text-gray-50">
+                        {atendimento.id.substring(0, 4)}...
+                      </TableCell>
+                      <TableCell className="text-gray-800 dark:text-gray-200">{atendimento.nome || "N/A"}</TableCell>
+                      <TableCell className="text-gray-800 dark:text-gray-200">
+                        {atendimento.telefone || "N/A"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getStatusColor(atendimento.status)}>{atendimento.status}</Badge>
+                      </TableCell>
+                      <TableCell className="text-gray-800 dark:text-gray-200 max-w-[200px] truncate">
+                        {atendimento.mensagem_limpa || "N/A"}
+                      </TableCell>
+                      <TableCell className="text-gray-800 dark:text-gray-200">
+                        {formatDate(atendimento.data_inicio)}
+                      </TableCell>
+                      <TableCell>
+                        {atendimento.mensagens && atendimento.mensagens.length > 0 ? (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="dark:bg-gray-700 dark:text-gray-50 dark:border-gray-600 hover:dark:bg-gray-600 bg-transparent"
+                              >
+                                Ver ({atendimento.mensagens.length})
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80 p-4 dark:bg-gray-800 dark:border-gray-700">
+                              <h4 className="font-semibold text-gray-900 mb-2 dark:text-gray-50">
+                                Histórico de Mensagens
+                              </h4>
+                              <ScrollArea className="h-48 pr-4">
+                                <div className="space-y-2">
+                                  {atendimento.mensagens.map((msg, idx) => (
+                                    <div key={idx} className="border-b pb-2 last:border-b-0 dark:border-gray-700">
+                                      <p className="text-xs text-gray-500 dark:text-gray-400">{msg.hora}</p>
+                                      <p className="text-sm text-gray-700 dark:text-gray-300">{msg.conteudo}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </ScrollArea>
+                            </PopoverContent>
+                          </Popover>
+                        ) : (
+                          <span className="text-gray-500 dark:text-gray-400">N/A</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
 
             {/* Pagination Controls */}

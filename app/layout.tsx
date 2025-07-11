@@ -1,12 +1,26 @@
 import type React from "react"
-import { ThemeProvider } from "@/components/theme-provider"
+import type { Metadata } from "next"
+import { Inter } from "next/font/google"
 import "./globals.css"
-import DashboardLayout from "@/components/dashboard-layout"
+import { ThemeProvider } from "@/components/theme-provider"
+import { DashboardLayout } from "@/components/dashboard-layout"
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+const inter = Inter({ subsets: ["latin"] })
+
+export const metadata: Metadata = {
+  title: "Sistema de Atendimento",
+  description: "Dashboard de atendimentos via webhook",
+    generator: 'v0.dev'
+}
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode
+}>) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      <body>
+      <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <DashboardLayout>{children}</DashboardLayout>
         </ThemeProvider>
@@ -14,7 +28,3 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   )
 }
-
-export const metadata = {
-      generator: 'v0.dev'
-    };
