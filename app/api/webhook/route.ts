@@ -117,7 +117,11 @@ function normalizeUmblerData(data: UmblerWebhookData) {
 }
 
 export async function POST(request: NextRequest) {
+  console.log("--- INÍCIO DO PROCESSAMENTO DO WEBHOOK ---")
   try {
+    // Logar cabeçalhos da requisição para debug
+    console.log("HEADERS RECEBIDOS:", JSON.stringify(Object.fromEntries(request.headers.entries()), null, 2))
+
     // Parse do body da requisição
     const rawBody: UmblerWebhookData = await request.json()
 
@@ -130,7 +134,10 @@ export async function POST(request: NextRequest) {
 
     // Validação básica dos dados obrigatórios
     if (!normalizedData.nome || !normalizedData.telefone) {
-      console.error("❌ Dados obrigatórios ausentes:", { nome: normalizedData.nome, telefone: normalizedData.telefone })
+      console.error("❌ ERRO: Campos obrigatórios ausentes:", {
+        nome: normalizedData.nome,
+        telefone: normalizedData.telefone,
+      })
       return NextResponse.json(
         {
           error: "Campos obrigatórios: nome e telefone",
@@ -142,11 +149,14 @@ export async function POST(request: NextRequest) {
 
     // Limpar a mensagem HTML
     const mensagemLimpa = cleanHtmlMessage(normalizedData.mensagem)
+    console.log("🧹 Mensagem HTML limpa:", mensagemLimpa)
 
     // Criar cliente Supabase
     const supabase = createClient()
+    console.log("🔗 Cliente Supabase criado.")
 
     // Inserir dados na tabela atendimentos
+    console.log("💾 Tentando inserir dados no Supabase...")
     const { data, error } = await supabase
       .from("atendimentos")
       .insert({
@@ -162,10 +172,15 @@ export async function POST(request: NextRequest) {
       .select()
 
     if (error) {
-      console.error("❌ Erro ao inserir no Supabase:", error)
+      console.error("❌ ERRO AO INSERIR NO SUPABASE:", {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      })
       return NextResponse.json(
         {
-          error: "Erro interno do servidor",
+          error: "Erro interno do servidor ao salvar atendimento",
           details: error.message,
           received_data: rawBody,
         },
@@ -185,7 +200,8 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     )
   } catch (error) {
-    console.error("💥 Erro no webhook:", error)
+    console.error("💥 ERRO GERAL NO WEBHOOK:", error instanceof Error ? error.message : JSON.stringify(error))
+    console.error("STACK TRACE:", error instanceof Error ? error.stack : "N/A")
 
     return NextResponse.json(
       {
@@ -194,15 +210,18 @@ export async function POST(request: NextRequest) {
       },
       { status: 500 },
     )
+  } finally {
+    console.log("--- FIM DO PROCESSAMENTO DO WEBHOOK ---")
   }
 }
 
 // Método GET para testar se a rota está funcionando
 export async function GET() {
+  console.log("--- REQUISIÇÃO GET NO WEBHOOK ---")
   return NextResponse.json({
     message: "Webhook endpoint está funcionando",
     timestamp: new Date().toISOString(),
-    url: "https://v0-next-js-backend-setup-kappa.vercel.app/api/webhook",
+    url: "https://v0-next-js-backend-setup-kappa.vercel.app/api/webhook", // Verifique se esta URL está correta no seu deploy
     methods: ["POST", "GET"],
     expected_fields: {
       required: ["nome/name/customer_name", "telefone/phone/customer_phone"],
