@@ -4,17 +4,7 @@ import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  RefreshCw,
-  MessageCircle,
-  Users,
-  TrendingUp,
-  TrendingDown,
-  Download,
-  CalendarDays,
-  DollarSign,
-  XCircle,
-} from "lucide-react"
+import { RefreshCw, MessageCircle, Users, TrendingUp, TrendingDown, Download, CalendarDays, DollarSign, XCircle } from 'lucide-react'
 import { createClient } from "@/lib/supabase"
 import {
   DropdownMenu,
@@ -69,7 +59,8 @@ export default function AtendimentosPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE_DEFAULT)
 
-  const supabase = createClient()
+  // Create supabase client only once
+  const supabase = useMemo(() => createClient(), [])
 
   const fetchAtendimentos = async () => {
     try {
@@ -141,12 +132,12 @@ export default function AtendimentosPage() {
     const indexOfLastItem = currentPage * itemsPerPage
     const indexOfFirstItem = indexOfLastItem - itemsPerPage
     return safeAtendimentos.slice(indexOfFirstItem, indexOfLastItem)
-  }, [safeAtendimentos, currentPage, itemsPerPage]) // Dependency updated to safeAtendimentos
+  }, [safeAtendimentos, currentPage, itemsPerPage])
 
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber)
 
   const handleShowAll = () => {
-    setItemsPerPage(safeAtendimentos.length) // Use safeAtendimentos here too
+    setItemsPerPage(safeAtendimentos.length)
     setCurrentPage(1)
   }
 
@@ -182,8 +173,8 @@ export default function AtendimentosPage() {
       item.status,
       formatDate(item.data_inicio),
       formatDate(item.data_fim),
-      `"${item.mensagem_limpa.replace(/"/g, '""')}"`, // Escape quotes for CSV
-      `"${JSON.stringify(item.mensagens).replace(/"/g, '""')}"`, // Stringify and escape messages
+      `"${item.mensagem_limpa.replace(/"/g, '""')}"`,
+      `"${JSON.stringify(item.mensagens).replace(/"/g, '""')}"`,
       formatDate(item.criado_em),
     ])
 
@@ -203,7 +194,7 @@ export default function AtendimentosPage() {
   }
 
   const handleExport = (timeframe: string) => {
-    let filteredData = safeAtendimentos // Use safeAtendimentos here
+    let filteredData = safeAtendimentos
     const now = new Date()
 
     if (timeframe !== "all") {
@@ -228,7 +219,7 @@ export default function AtendimentosPage() {
           startDate.setFullYear(now.getFullYear() - 1)
           break
       }
-      filteredData = safeAtendimentos.filter((a) => new Date(a.criado_em) >= startDate) // Use safeAtendimentos here
+      filteredData = safeAtendimentos.filter((a) => new Date(a.criado_em) >= startDate)
     }
 
     const filename = `atendimentos_${timeframe}_${now.toISOString().split("T")[0]}.csv`
@@ -383,7 +374,7 @@ export default function AtendimentosPage() {
           </Card>
         </div>
 
-        {/* Seção de Métricas e Gráficos de Google Ads (Exemplo) - Mantendo apenas os cards de métricas */}
+        {/* Seção de Métricas de Marketing */}
         <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-50 mb-6">Métricas de Marketing (Exemplo)</h2>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <Card className="bg-white shadow-sm dark:bg-gray-800 dark:text-gray-50">
@@ -410,11 +401,10 @@ export default function AtendimentosPage() {
               <p className="text-xs text-muted-foreground mt-1">Custo médio por cliente adquirido</p>
             </CardContent>
           </Card>
-          {/* O card de "Gastos Mensais no Google Ads" com o gráfico foi removido daqui */}
         </div>
 
         <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-50 mb-6">Detalhes dos Atendimentos Recentes</h2>
-        {safeAtendimentos.length === 0 ? ( // Use safeAtendimentos here
+        {safeAtendimentos.length === 0 ? (
           <Card className="bg-white shadow-sm dark:bg-gray-800">
             <CardContent className="p-8 text-center">
               <MessageCircle className="h-16 w-16 text-gray-400 mx-auto mb-4 dark:text-gray-600" />
@@ -500,7 +490,7 @@ export default function AtendimentosPage() {
 
             {/* Pagination Controls */}
             <div className="mt-8 flex justify-center items-center gap-4">
-              {itemsPerPage === safeAtendimentos.length ? ( // Use safeAtendimentos here
+              {itemsPerPage === safeAtendimentos.length ? (
                 <Button
                   onClick={handleShowPaginated}
                   variant="outline"
@@ -514,11 +504,11 @@ export default function AtendimentosPage() {
                   variant="outline"
                   className="dark:bg-gray-800 dark:text-gray-50 dark:border-gray-700 hover:dark:bg-gray-700 bg-transparent"
                 >
-                  Mostrar Todos ({safeAtendimentos.length}) {/* Use safeAtendimentos here */}
+                  Mostrar Todos ({safeAtendimentos.length})
                 </Button>
               )}
 
-              {itemsPerPage !== safeAtendimentos.length && ( // Use safeAtendimentos here
+              {itemsPerPage !== safeAtendimentos.length && (
                 <Pagination>
                   <PaginationContent>
                     <PaginationItem>
@@ -528,8 +518,6 @@ export default function AtendimentosPage() {
                           e.preventDefault()
                           if (currentPage > 1) paginate(currentPage - 1)
                         }}
-                        aria-disabled={currentPage === 1}
-                        tabIndex={currentPage === 1 ? -1 : undefined}
                         className={
                           currentPage === 1
                             ? "pointer-events-none opacity-50"
@@ -563,8 +551,6 @@ export default function AtendimentosPage() {
                           e.preventDefault()
                           if (currentPage < totalPages) paginate(currentPage + 1)
                         }}
-                        aria-disabled={currentPage === totalPages}
-                        tabIndex={currentPage === totalPages ? -1 : undefined}
                         className={
                           currentPage === totalPages
                             ? "pointer-events-none opacity-50"
