@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase"
 import { cleanHtmlMessage } from "@/lib/utils"
 
-// Helper function to normalize incoming webhook data
+// Helper function to normalize incoming webhook data from Umbler
 function normalizeUmblerData(rawBody: any) {
   let nome = "Cliente não identificado"
   let telefone = "Não informado"
@@ -11,9 +11,10 @@ function normalizeUmblerData(rawBody: any) {
   let data_inicio = new Date().toISOString()
   let data_fim = null
   let mensagens: { hora: string; conteudo: string }[] = []
+  let tags: string[] = []
   const id = rawBody.id || rawBody.chatId || rawBody.conversationId || crypto.randomUUID()
 
-  // Try to extract name
+  // Extract name
   if (rawBody.name) nome = rawBody.name
   else if (rawBody.customer_name) nome = rawBody.customer_name
   else if (rawBody.contact && rawBody.contact.name) nome = rawBody.contact.name
@@ -21,7 +22,7 @@ function normalizeUmblerData(rawBody: any) {
   else if (rawBody.conversation && rawBody.conversation.contact && rawBody.conversation.contact.name)
     nome = rawBody.conversation.contact.name
 
-  // Try to extract phone
+  // Extract phone
   if (rawBody.phone) telefone = rawBody.phone
   else if (rawBody.customer_phone) telefone = rawBody.customer_phone
   else if (rawBody.contact && rawBody.contact.phoneNumber) telefone = rawBody.contact.phoneNumber
@@ -30,7 +31,7 @@ function normalizeUmblerData(rawBody: any) {
   else if (rawBody.conversation && rawBody.conversation.contact && rawBody.conversation.contact.phoneNumber)
     telefone = rawBody.conversation.contact.phoneNumber
 
-  // Try to extract message
+  // Extract message
   if (rawBody.message) mensagem = rawBody.message
   else if (rawBody.description) mensagem = rawBody.description
   else if (rawBody.chat && rawBody.chat.lastMessage && rawBody.chat.lastMessage.content)
@@ -42,12 +43,23 @@ function normalizeUmblerData(rawBody: any) {
     if (lastMessage.content) mensagem = lastMessage.content
   }
 
-  // Try to extract status
+  // Extract status
   if (rawBody.status) status = rawBody.status
   else if (rawBody.chat && rawBody.chat.status) status = rawBody.chat.status
   else if (rawBody.conversation && rawBody.conversation.status) status = rawBody.conversation.status
 
-  // Try to extract timestamps
+  // Extract tags from Umbler
+  if (rawBody.tags && Array.isArray(rawBody.tags)) {
+    tags = rawBody.tags
+  } else if (rawBody.chat && rawBody.chat.tags && Array.isArray(rawBody.chat.tags)) {
+    tags = rawBody.chat.tags
+  } else if (rawBody.conversation && rawBody.conversation.tags && Array.isArray(rawBody.conversation.tags)) {
+    tags = rawBody.conversation.tags
+  } else if (rawBody.labels && Array.isArray(rawBody.labels)) {
+    tags = rawBody.labels
+  }
+
+  // Extract timestamps
   if (rawBody.createdAt) data_inicio = new Date(rawBody.createdAt).toISOString()
   else if (rawBody.chat && rawBody.chat.createdAt) data_inicio = new Date(rawBody.chat.createdAt).toISOString()
   else if (rawBody.conversation && rawBody.conversation.createdAt)
@@ -75,7 +87,6 @@ function normalizeUmblerData(rawBody: any) {
       conteudo: msg.content || "Mensagem vazia",
     }))
   } else {
-    // If no message array, use the single message found
     mensagens = [{ hora: new Date().toLocaleTimeString("pt-BR"), conteudo: mensagem }]
   }
 
@@ -87,8 +98,9 @@ function normalizeUmblerData(rawBody: any) {
     data_inicio,
     data_fim,
     mensagens,
+    tags,
     mensagem_limpa: cleanHtmlMessage(mensagem),
-    criado_em: new Date().toISOString(), // Timestamp for when it was created in our DB
+    criado_em: new Date().toISOString(),
   }
 }
 
@@ -97,7 +109,7 @@ export async function POST(request: Request) {
 
   try {
     const rawBody = await request.json()
-    console.log("📥 Dados recebidos do Umbler:", JSON.stringify(rawBody, null, 2))
+    console.log("📥 Dados recebidos da Umbler:", JSON.stringify(rawBody, null, 2))
 
     const normalizedData = normalizeUmblerData(rawBody)
     console.log("🔄 Dados normalizados:", JSON.stringify(normalizedData, null, 2))
@@ -110,9 +122,20 @@ export async function POST(request: Request) {
     }
 
     console.log("✅ Dados inseridos com sucesso no Supabase:", data)
-    return NextResponse.json({ message: "Webhook recebido e processado com sucesso!", data }, { status: 200 })
+    return NextResponse.json(
+      {
+        message: "Webhook da Umbler recebido e processado com sucesso!",
+        data,
+      },
+      { status: 200 },
+    )
   } catch (error) {
-    console.error("🚨 Erro no processamento do webhook:", error)
-    return NextResponse.json({ error: "Erro interno do servidor ao processar o webhook." }, { status: 500 })
+    console.error("🚨 Erro no processamento do webhook da Umbler:", error)
+    return NextResponse.json(
+      {
+        error: "Erro interno do servidor ao processar webhook da Umbler.",
+      },
+      { status: 500 },
+    )
   }
 }

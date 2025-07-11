@@ -4,7 +4,20 @@ import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { RefreshCw, MessageCircle, Users, TrendingUp, TrendingDown, Download, CalendarDays, DollarSign, XCircle } from 'lucide-react'
+import {
+  RefreshCw,
+  MessageCircle,
+  Users,
+  TrendingUp,
+  TrendingDown,
+  Download,
+  CalendarDays,
+  Eye,
+  Target,
+  Tag,
+  Globe,
+  Smartphone,
+} from "lucide-react"
 import { createClient } from "@/lib/supabase"
 import {
   DropdownMenu,
@@ -40,7 +53,21 @@ interface Atendimento {
   data_inicio: string
   data_fim: string
   mensagens: Mensagem[]
+  tags: string[]
   mensagem_limpa: string
+  criado_em: string
+}
+
+interface VisitanteSite {
+  id: string
+  url_origem: string
+  pagina_visitada: string
+  tempo_permanencia: number
+  origem_trafego: string
+  dispositivo: string
+  converteu: boolean
+  acao_realizada: string
+  timestamp_visita: string
   criado_em: string
 }
 
@@ -48,57 +75,107 @@ const ITEMS_PER_PAGE_DEFAULT = 10
 
 export default function AtendimentosPage() {
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([])
+  const [visitantes, setVisitantes] = useState<VisitanteSite[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Métricas de atendimentos
   const [totalAtendimentos, setTotalAtendimentos] = useState<number>(0)
   const [atendimentosEmAndamento, setAtendimentosEmAndamento] = useState<number>(0)
   const [atendimentosFinalizados, setAtendimentosFinalizados] = useState<number>(0)
   const [atendimentosAbandonados, setAtendimentosAbandonados] = useState<number>(0)
   const [totalClientesUnicos, setTotalClientesUnicos] = useState<number>(0)
 
+  // Métricas do site
+  const [totalVisitantes, setTotalVisitantes] = useState<number>(0)
+  const [visitantesMobile, setVisitantesMobile] = useState<number>(0)
+  const [visitantesDesktop, setVisitantesDesktop] = useState<number>(0)
+  const [taxaConversao, setTaxaConversao] = useState<number>(0)
+
+  // Métricas de tags
+  const [tagsStats, setTagsStats] = useState<{ [key: string]: number }>({})
+
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE_DEFAULT)
 
-  // Create supabase client only once
   const supabase = useMemo(() => createClient(), [])
 
-  const fetchAtendimentos = async () => {
+  const fetchData = async () => {
     try {
       setLoading(true)
       setError(null)
 
-      const { data, error: fetchError } = await supabase
+      // Buscar atendimentos
+      const { data: atendimentosData, error: atendimentosError } = await supabase
         .from("atendimentos")
         .select("*")
         .order("criado_em", { ascending: false })
 
-      if (fetchError) {
-        throw fetchError
+      if (atendimentosError) {
+        throw atendimentosError
       }
 
-      setAtendimentos(data || [])
+      // Buscar visitantes do site
+      const { data: visitantesData, error: visitantesError } = await supabase
+        .from("visitantes_site")
+        .select("*")
+        .order("criado_em", { ascending: false })
 
-      // Calculate metrics
-      const total = data?.length || 0
-      const emAndamento = data?.filter((a) => a.status.toLowerCase() === "em andamento").length || 0
-      const finalizados = data?.filter((a) => a.status.toLowerCase() === "finalizado").length || 0
-      const abandonados = data?.filter((a) => a.status.toLowerCase() === "abandonado").length || 0
-      const uniquePhones = new Set(data?.map((a) => a.telefone)).size || 0
+      if (visitantesError) {
+        console.warn("Tabela visitantes_site não encontrada, criando dados de exemplo...")
+        setVisitantes([])
+      } else {
+        setVisitantes(visitantesData || [])
+      }
+
+      setAtendimentos(atendimentosData || [])
+
+      // Calcular métricas de atendimentos
+      const total = atendimentosData?.length || 0
+      const emAndamento = atendimentosData?.filter((a) => a.status.toLowerCase() === "em andamento").length || 0
+      const finalizados = atendimentosData?.filter((a) => a.status.toLowerCase() === "finalizado").length || 0
+      const abandonados = atendimentosData?.filter((a) => a.status.toLowerCase() === "abandonado").length || 0
+      const uniquePhones = new Set(atendimentosData?.map((a) => a.telefone)).size || 0
 
       setTotalAtendimentos(total)
       setAtendimentosEmAndamento(emAndamento)
       setAtendimentosFinalizados(finalizados)
       setAtendimentosAbandonados(abandonados)
       setTotalClientesUnicos(uniquePhones)
+
+      // Calcular métricas do site
+      const totalVisitas = visitantesData?.length || 0
+      const mobile =
+        visitantesData?.filter(
+          (v) => v.dispositivo?.toLowerCase().includes("mobile") || v.dispositivo?.toLowerCase().includes("tablet"),
+        ).length || 0
+      const desktop = totalVisitas - mobile
+      const conversao = totalVisitas > 0 ? (total / totalVisitas) * 100 : 0
+
+      setTotalVisitantes(totalVisitas)
+      setVisitantesMobile(mobile)
+      setVisitantesDesktop(desktop)
+      setTaxaConversao(conversao)
+
+      // Calcular estatísticas de tags
+      const tagsCount: { [key: string]: number } = {}
+      atendimentosData?.forEach((atendimento) => {
+        if (atendimento.tags && Array.isArray(atendimento.tags)) {
+          atendimento.tags.forEach((tag: string) => {
+            tagsCount[tag] = (tagsCount[tag] || 0) + 1
+          })
+        }
+      })
+      setTagsStats(tagsCount)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao carregar atendimentos")
+      setError(err instanceof Error ? err.message : "Erro ao carregar dados")
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    fetchAtendimentos()
+    fetchData()
   }, [])
 
   const getStatusColor = (status: string) => {
@@ -114,6 +191,18 @@ export default function AtendimentosPage() {
     }
   }
 
+  const getTagColor = (tag: string) => {
+    const colors = [
+      "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+      "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+      "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200",
+      "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200",
+      "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200",
+    ]
+    const index = tag.length % colors.length
+    return colors[index]
+  }
+
   const formatDate = (dateString: string) => {
     if (!dateString) return "N/A"
     try {
@@ -123,10 +212,7 @@ export default function AtendimentosPage() {
     }
   }
 
-  // Defensive check for atendimentos to ensure it's always an array
   const safeAtendimentos = atendimentos || []
-
-  // Pagination logic
   const totalPages = Math.ceil(safeAtendimentos.length / itemsPerPage)
   const currentItems = useMemo(() => {
     const indexOfLastItem = currentPage * itemsPerPage
@@ -146,7 +232,6 @@ export default function AtendimentosPage() {
     setCurrentPage(1)
   }
 
-  // Export logic
   const exportToCsv = (data: Atendimento[], filename: string) => {
     if (data.length === 0) {
       alert("Não há dados para exportar no período selecionado.")
@@ -159,6 +244,7 @@ export default function AtendimentosPage() {
       "Telefone",
       "Respondeu",
       "Status",
+      "Tags",
       "Data Início",
       "Data Fim",
       "Mensagem Limpa",
@@ -171,15 +257,15 @@ export default function AtendimentosPage() {
       item.telefone,
       item.respondeu ? "Sim" : "Não",
       item.status,
+      Array.isArray(item.tags) ? item.tags.join(", ") : "",
       formatDate(item.data_inicio),
       formatDate(item.data_fim),
       `"${item.mensagem_limpa.replace(/"/g, '""')}"`,
-      `"${JSON.stringify(item.mensagens).replace(/"/g, '""')}"`,
       formatDate(item.criado_em),
+      `"${JSON.stringify(item.mensagens).replace(/"/g, '""')}"`,
     ])
 
     const csvContent = [headers.join(","), ...rows.map((e) => e.join(","))].join("\n")
-
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
     const link = document.createElement("a")
     if (link.download !== undefined) {
@@ -231,7 +317,7 @@ export default function AtendimentosPage() {
       <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-6 flex items-center justify-center">
         <div className="flex flex-col items-center">
           <RefreshCw className="h-12 w-12 animate-spin text-blue-600 dark:text-blue-400" />
-          <span className="mt-4 text-xl text-gray-700 dark:text-gray-300">Carregando atendimentos...</span>
+          <span className="mt-4 text-xl text-gray-700 dark:text-gray-300">Carregando dados...</span>
         </div>
       </div>
     )
@@ -242,70 +328,34 @@ export default function AtendimentosPage() {
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-50">Dashboard de Atendimentos</h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">
-              Visão geral e detalhes dos atendimentos recebidos via webhook
-            </p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-50">Dashboard Integrado</h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">WordPress + Umbler - Análise completa de conversão</p>
           </div>
           <div className="flex gap-4">
-            <Button onClick={fetchAtendimentos} className="flex items-center gap-2 px-4 py-2 text-sm">
+            <Button onClick={fetchData} className="flex items-center gap-2 px-4 py-2 text-sm">
               <RefreshCw className="h-4 w-4" />
               Atualizar Dados
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="flex items-center gap-2 px-4 py-2 text-sm bg-transparent dark:bg-gray-800 dark:text-gray-50 dark:border-gray-700 hover:dark:bg-gray-700"
-                >
+                <Button variant="outline" className="flex items-center gap-2 px-4 py-2 text-sm bg-transparent">
                   <Download className="h-4 w-4" />
                   Exportar
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="dark:bg-gray-800 dark:border-gray-700">
-                <DropdownMenuLabel className="dark:text-gray-300">Exportar por Período</DropdownMenuLabel>
-                <DropdownMenuSeparator className="dark:bg-gray-700" />
-                <DropdownMenuItem
-                  onClick={() => handleExport("1day")}
-                  className="dark:text-gray-200 hover:dark:bg-gray-700"
-                >
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Exportar por Período</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => handleExport("1day")}>
                   <CalendarDays className="mr-2 h-4 w-4" /> 1 Dia
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => handleExport("1week")}
-                  className="dark:text-gray-200 hover:dark:bg-gray-700"
-                >
+                <DropdownMenuItem onClick={() => handleExport("1week")}>
                   <CalendarDays className="mr-2 h-4 w-4" /> 1 Semana
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => handleExport("1month")}
-                  className="dark:text-gray-200 hover:dark:bg-gray-700"
-                >
+                <DropdownMenuItem onClick={() => handleExport("1month")}>
                   <CalendarDays className="mr-2 h-4 w-4" /> 1 Mês
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => handleExport("3months")}
-                  className="dark:text-gray-200 hover:dark:bg-gray-700"
-                >
-                  <CalendarDays className="mr-2 h-4 w-4" /> 3 Meses
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => handleExport("6months")}
-                  className="dark:text-gray-200 hover:dark:bg-gray-700"
-                >
-                  <CalendarDays className="mr-2 h-4 w-4" /> 6 Meses
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => handleExport("12months")}
-                  className="dark:text-gray-200 hover:dark:bg-gray-700"
-                >
-                  <CalendarDays className="mr-2 h-4 w-4" /> 12 Meses
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="dark:bg-gray-700" />
-                <DropdownMenuItem
-                  onClick={() => handleExport("all")}
-                  className="dark:text-gray-200 hover:dark:bg-gray-700"
-                >
+                <DropdownMenuItem onClick={() => handleExport("all")}>
                   <CalendarDays className="mr-2 h-4 w-4" /> Todo o Tempo
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -315,34 +365,81 @@ export default function AtendimentosPage() {
 
         {error && (
           <Card className="mb-6 border-red-300 bg-red-100 shadow-sm dark:bg-red-950 dark:border-red-700">
-            <CardContent className="p-4 text-red-800 font-medium flex items-center gap-3 dark:text-red-200">
-              <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
-              <div>
-                <p>Erro ao carregar dados: {error}</p>
-                <p className="text-sm mt-1">
-                  Por favor, verifique os logs do Vercel para mais detalhes sobre o erro de integração ou dados
-                  ausentes.
-                </p>
-              </div>
+            <CardContent className="p-4 text-red-800 font-medium dark:text-red-200">
+              Erro ao carregar dados: {error}
             </CardContent>
           </Card>
         )}
 
-        {/* Seção de Métricas Principais */}
+        {/* Métricas do Site WordPress */}
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-50 mb-4">Métricas do Site</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card className="bg-white shadow-sm dark:bg-gray-800 dark:text-gray-50">
+          <Card className="bg-white shadow-sm dark:bg-gray-800">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Total de Visitantes
+              </CardTitle>
+              <Eye className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">{totalVisitantes}</div>
+              <p className="text-xs text-muted-foreground mt-1">Visitantes únicos do site</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white shadow-sm dark:bg-gray-800">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-700 dark:text-gray-300">Dispositivo Mobile</CardTitle>
+              <Smartphone className="h-4 w-4 text-green-600 dark:text-green-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-700 dark:text-green-300">{visitantesMobile}</div>
+              <p className="text-xs text-muted-foreground mt-1">Acessos via mobile/tablet</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white shadow-sm dark:bg-gray-800">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Dispositivo Desktop
+              </CardTitle>
+              <Globe className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-purple-700 dark:text-purple-300">{visitantesDesktop}</div>
+              <p className="text-xs text-muted-foreground mt-1">Acessos via desktop</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white shadow-sm dark:bg-gray-800">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-700 dark:text-gray-300">Taxa de Conversão</CardTitle>
+              <Target className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-700 dark:text-orange-300">{taxaConversao.toFixed(1)}%</div>
+              <p className="text-xs text-muted-foreground mt-1">Site → Atendimento</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Métricas de Atendimentos */}
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-50 mb-4">Métricas de Atendimentos</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <Card className="bg-white shadow-sm dark:bg-gray-800">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Total de Atendimentos
               </CardTitle>
-              <MessageCircle className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+              <MessageCircle className="h-4 w-4 text-gray-400" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{totalAtendimentos}</div>
-              <p className="text-xs text-muted-foreground mt-1">Todos os atendimentos registrados</p>
+              <p className="text-xs text-muted-foreground mt-1">Todos os atendimentos</p>
             </CardContent>
           </Card>
-          <Card className="bg-white shadow-sm dark:bg-gray-800 dark:text-gray-50">
+
+          <Card className="bg-white shadow-sm dark:bg-gray-800">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-gray-700 dark:text-gray-300">Em Andamento</CardTitle>
               <TrendingUp className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
@@ -352,7 +449,8 @@ export default function AtendimentosPage() {
               <p className="text-xs text-muted-foreground mt-1">Atualmente ativos</p>
             </CardContent>
           </Card>
-          <Card className="bg-white shadow-sm dark:bg-gray-800 dark:text-gray-50">
+
+          <Card className="bg-white shadow-sm dark:bg-gray-800">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-gray-700 dark:text-gray-300">Finalizados</CardTitle>
               <TrendingDown className="h-4 w-4 text-green-600 dark:text-green-400" />
@@ -362,7 +460,8 @@ export default function AtendimentosPage() {
               <p className="text-xs text-muted-foreground mt-1">Concluídos com sucesso</p>
             </CardContent>
           </Card>
-          <Card className="bg-white shadow-sm dark:bg-gray-800 dark:text-gray-50">
+
+          <Card className="bg-white shadow-sm dark:bg-gray-800">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-gray-700 dark:text-gray-300">Clientes Únicos</CardTitle>
               <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
@@ -374,40 +473,36 @@ export default function AtendimentosPage() {
           </Card>
         </div>
 
-        {/* Seção de Métricas de Marketing */}
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-50 mb-6">Métricas de Marketing (Exemplo)</h2>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <Card className="bg-white shadow-sm dark:bg-gray-800 dark:text-gray-50">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Gastos Totais no Google Ads
-              </CardTitle>
-              <DollarSign className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-purple-700 dark:text-purple-300">R$ 18.500,00</div>
-              <p className="text-xs text-muted-foreground mt-1">Total gasto no último ano</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-white shadow-sm dark:bg-gray-800 dark:text-gray-50">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Custo Médio por Cliente
-              </CardTitle>
-              <DollarSign className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-700 dark:text-orange-300">R$ 15,30</div>
-              <p className="text-xs text-muted-foreground mt-1">Custo médio por cliente adquirido</p>
-            </CardContent>
-          </Card>
-        </div>
+        {/* Métricas de Tags */}
+        {Object.keys(tagsStats).length > 0 && (
+          <>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-50 mb-4">Tags dos Atendimentos</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              {Object.entries(tagsStats)
+                .slice(0, 8)
+                .map(([tag, count]) => (
+                  <Card key={tag} className="bg-white shadow-sm dark:bg-gray-800">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
+                        {tag}
+                      </CardTitle>
+                      <Tag className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">{count}</div>
+                      <p className="text-xs text-muted-foreground mt-1">Atendimentos com esta tag</p>
+                    </CardContent>
+                  </Card>
+                ))}
+            </div>
+          </>
+        )}
 
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-50 mb-6">Detalhes dos Atendimentos Recentes</h2>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-50 mb-6">Detalhes dos Atendimentos</h2>
         {safeAtendimentos.length === 0 ? (
           <Card className="bg-white shadow-sm dark:bg-gray-800">
             <CardContent className="p-8 text-center">
-              <MessageCircle className="h-16 w-16 text-gray-400 mx-auto mb-4 dark:text-gray-600" />
+              <MessageCircle className="h-16 w-16 text-gray-400 mx-auto mb-4" />
               <h3 className="text-xl font-medium text-gray-900 dark:text-gray-50 mb-2">
                 Nenhum atendimento encontrado
               </h3>
@@ -426,7 +521,8 @@ export default function AtendimentosPage() {
                     <TableHead className="text-gray-700 dark:text-gray-300">Nome</TableHead>
                     <TableHead className="text-gray-700 dark:text-gray-300">Telefone</TableHead>
                     <TableHead className="text-gray-700 dark:text-gray-300">Status</TableHead>
-                    <TableHead className="text-gray-700 dark:text-gray-300">Mensagem Principal</TableHead>
+                    <TableHead className="text-gray-700 dark:text-gray-300">Tags</TableHead>
+                    <TableHead className="text-gray-700 dark:text-gray-300">Mensagem</TableHead>
                     <TableHead className="text-gray-700 dark:text-gray-300">Início</TableHead>
                     <TableHead className="text-gray-700 dark:text-gray-300">Histórico</TableHead>
                   </TableRow>
@@ -444,6 +540,24 @@ export default function AtendimentosPage() {
                       <TableCell>
                         <Badge className={getStatusColor(atendimento.status)}>{atendimento.status}</Badge>
                       </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {atendimento.tags && Array.isArray(atendimento.tags) ? (
+                            atendimento.tags.slice(0, 2).map((tag, idx) => (
+                              <Badge key={idx} className={getTagColor(tag)} variant="outline">
+                                {tag}
+                              </Badge>
+                            ))
+                          ) : (
+                            <span className="text-gray-500 dark:text-gray-400 text-xs">Sem tags</span>
+                          )}
+                          {atendimento.tags && atendimento.tags.length > 2 && (
+                            <Badge variant="outline" className="text-xs">
+                              +{atendimento.tags.length - 2}
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="text-gray-800 dark:text-gray-200 max-w-[200px] truncate">
                         {atendimento.mensagem_limpa || "N/A"}
                       </TableCell>
@@ -454,22 +568,18 @@ export default function AtendimentosPage() {
                         {atendimento.mensagens && atendimento.mensagens.length > 0 ? (
                           <Popover>
                             <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="dark:bg-gray-700 dark:text-gray-50 dark:border-gray-600 hover:dark:bg-gray-600 bg-transparent"
-                              >
+                              <Button variant="outline" size="sm">
                                 Ver ({atendimento.mensagens.length})
                               </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-80 p-4 dark:bg-gray-800 dark:border-gray-700">
+                            <PopoverContent className="w-80 p-4">
                               <h4 className="font-semibold text-gray-900 mb-2 dark:text-gray-50">
                                 Histórico de Mensagens
                               </h4>
                               <ScrollArea className="h-48 pr-4">
                                 <div className="space-y-2">
                                   {atendimento.mensagens.map((msg, idx) => (
-                                    <div key={idx} className="border-b pb-2 last:border-b-0 dark:border-gray-700">
+                                    <div key={idx} className="border-b pb-2 last:border-b-0">
                                       <p className="text-xs text-gray-500 dark:text-gray-400">{msg.hora}</p>
                                       <p className="text-sm text-gray-700 dark:text-gray-300">{msg.conteudo}</p>
                                     </div>
@@ -488,22 +598,13 @@ export default function AtendimentosPage() {
               </Table>
             </div>
 
-            {/* Pagination Controls */}
             <div className="mt-8 flex justify-center items-center gap-4">
               {itemsPerPage === safeAtendimentos.length ? (
-                <Button
-                  onClick={handleShowPaginated}
-                  variant="outline"
-                  className="dark:bg-gray-800 dark:text-gray-50 dark:border-gray-700 hover:dark:bg-gray-700 bg-transparent"
-                >
+                <Button onClick={handleShowPaginated} variant="outline">
                   Mostrar Paginação
                 </Button>
               ) : (
-                <Button
-                  onClick={handleShowAll}
-                  variant="outline"
-                  className="dark:bg-gray-800 dark:text-gray-50 dark:border-gray-700 hover:dark:bg-gray-700 bg-transparent"
-                >
+                <Button onClick={handleShowAll} variant="outline">
                   Mostrar Todos ({safeAtendimentos.length})
                 </Button>
               )}
@@ -518,11 +619,7 @@ export default function AtendimentosPage() {
                           e.preventDefault()
                           if (currentPage > 1) paginate(currentPage - 1)
                         }}
-                        className={
-                          currentPage === 1
-                            ? "pointer-events-none opacity-50"
-                            : "dark:bg-gray-800 dark:text-gray-50 dark:border-gray-700 hover:dark:bg-gray-700"
-                        }
+                        className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
                       />
                     </PaginationItem>
                     {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
@@ -534,11 +631,6 @@ export default function AtendimentosPage() {
                             e.preventDefault()
                             paginate(page)
                           }}
-                          className={
-                            page === currentPage
-                              ? "dark:bg-gray-700 dark:text-gray-50"
-                              : "dark:bg-gray-800 dark:text-gray-50 dark:border-gray-700 hover:dark:bg-gray-700"
-                          }
                         >
                           {page}
                         </PaginationLink>
@@ -551,11 +643,7 @@ export default function AtendimentosPage() {
                           e.preventDefault()
                           if (currentPage < totalPages) paginate(currentPage + 1)
                         }}
-                        className={
-                          currentPage === totalPages
-                            ? "pointer-events-none opacity-50"
-                            : "dark:bg-gray-800 dark:text-gray-50 dark:border-gray-700 hover:dark:bg-gray-700"
-                        }
+                        className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
                       />
                     </PaginationItem>
                   </PaginationContent>
