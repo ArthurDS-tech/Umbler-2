@@ -132,18 +132,21 @@ export default function AtendimentosPage() {
     }
   }
 
+  // Defensive check for atendimentos to ensure it's always an array
+  const safeAtendimentos = atendimentos || []
+
   // Pagination logic
-  const totalPages = Math.ceil(atendimentos.length / itemsPerPage)
+  const totalPages = Math.ceil(safeAtendimentos.length / itemsPerPage)
   const currentItems = useMemo(() => {
     const indexOfLastItem = currentPage * itemsPerPage
     const indexOfFirstItem = indexOfLastItem - itemsPerPage
-    return atendimentos.slice(indexOfFirstItem, indexOfLastItem)
-  }, [atendimentos, currentPage, itemsPerPage])
+    return safeAtendimentos.slice(indexOfFirstItem, indexOfLastItem)
+  }, [safeAtendimentos, currentPage, itemsPerPage]) // Dependency updated to safeAtendimentos
 
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber)
 
   const handleShowAll = () => {
-    setItemsPerPage(atendimentos.length)
+    setItemsPerPage(safeAtendimentos.length) // Use safeAtendimentos here too
     setCurrentPage(1)
   }
 
@@ -200,7 +203,7 @@ export default function AtendimentosPage() {
   }
 
   const handleExport = (timeframe: string) => {
-    let filteredData = atendimentos
+    let filteredData = safeAtendimentos // Use safeAtendimentos here
     const now = new Date()
 
     if (timeframe !== "all") {
@@ -225,7 +228,7 @@ export default function AtendimentosPage() {
           startDate.setFullYear(now.getFullYear() - 1)
           break
       }
-      filteredData = atendimentos.filter((a) => new Date(a.criado_em) >= startDate)
+      filteredData = safeAtendimentos.filter((a) => new Date(a.criado_em) >= startDate) // Use safeAtendimentos here
     }
 
     const filename = `atendimentos_${timeframe}_${now.toISOString().split("T")[0]}.csv`
@@ -411,7 +414,7 @@ export default function AtendimentosPage() {
         </div>
 
         <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-50 mb-6">Detalhes dos Atendimentos Recentes</h2>
-        {atendimentos.length === 0 ? (
+        {safeAtendimentos.length === 0 ? ( // Use safeAtendimentos here
           <Card className="bg-white shadow-sm dark:bg-gray-800">
             <CardContent className="p-8 text-center">
               <MessageCircle className="h-16 w-16 text-gray-400 mx-auto mb-4 dark:text-gray-600" />
@@ -497,7 +500,7 @@ export default function AtendimentosPage() {
 
             {/* Pagination Controls */}
             <div className="mt-8 flex justify-center items-center gap-4">
-              {itemsPerPage === atendimentos.length ? (
+              {itemsPerPage === safeAtendimentos.length ? ( // Use safeAtendimentos here
                 <Button
                   onClick={handleShowPaginated}
                   variant="outline"
@@ -511,11 +514,11 @@ export default function AtendimentosPage() {
                   variant="outline"
                   className="dark:bg-gray-800 dark:text-gray-50 dark:border-gray-700 hover:dark:bg-gray-700 bg-transparent"
                 >
-                  Mostrar Todos ({atendimentos.length})
+                  Mostrar Todos ({safeAtendimentos.length}) {/* Use safeAtendimentos here */}
                 </Button>
               )}
 
-              {itemsPerPage !== atendimentos.length && (
+              {itemsPerPage !== safeAtendimentos.length && ( // Use safeAtendimentos here
                 <Pagination>
                   <PaginationContent>
                     <PaginationItem>

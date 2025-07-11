@@ -1,57 +1,31 @@
-import { createClient as createSupabaseClient } from "@supabase/supabase-js"
+import { createClient as createBrowserClient } from "@supabase/supabase-js"
+import { createClient as createServerClient } from "@supabase/supabase-js"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error("Variáveis de ambiente do Supabase não configuradas")
-}
+// Client-side Supabase client (for use in browser components)
+// Use a singleton pattern to avoid creating multiple clients
+let browserSupabaseClient: ReturnType<typeof createBrowserClient> | undefined
 
 export function createClient() {
-  return createSupabaseClient(supabaseUrl, supabaseAnonKey)
-}
-
-export type Database = {
-  public: {
-    Tables: {
-      atendimentos: {
-        Row: {
-          id: string
-          nome: string
-          telefone: string
-          respondeu: boolean
-          status: string
-          data_inicio: string
-          data_fim: string
-          mensagens: any
-          mensagem_limpa: string
-          criado_em: string
-        }
-        Insert: {
-          id?: string
-          nome: string
-          telefone: string
-          respondeu?: boolean
-          status: string
-          data_inicio: string
-          data_fim: string
-          mensagens?: any
-          mensagem_limpa?: string
-          criado_em?: string
-        }
-        Update: {
-          id?: string
-          nome?: string
-          telefone?: string
-          respondeu?: boolean
-          status?: string
-          data_inicio?: string
-          data_fim?: string
-          mensagens?: any
-          mensagem_limpa?: string
-          criado_em?: string
-        }
-      }
-    }
+  if (typeof window === "undefined") {
+    // Server-side client (for API routes, Server Components)
+    // Ensure these environment variables are available in your Vercel project settings
+    return createServerClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!, // Use service role key for server-side operations
+      {
+        auth: {
+          persistSession: false, // No session persistence on server
+        },
+      },
+    )
   }
+
+  // Browser-side client
+  if (!browserSupabaseClient) {
+    browserSupabaseClient = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    )
+  }
+  return browserSupabaseClient
 }

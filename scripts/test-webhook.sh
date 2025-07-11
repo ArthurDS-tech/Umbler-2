@@ -3,8 +3,31 @@
 # Script para testar o webhook localmente
 echo "🚀 Testando webhook do sistema de atendimento..."
 
-# URL local (altere para sua URL de produção quando necessário)
-WEBHOOK_URL="http://localhost:3000/api/webhook"
+# URL do seu endpoint de webhook (substitua pela sua URL de deploy ou localhost)
+WEBHOOK_URL="http://localhost:3000/api/webhook" # Altere para sua URL de deploy Vercel se estiver testando o deploy
+
+# Caminho para o arquivo JSON de exemplo
+JSON_FILE="scripts/webhook-test-example.json"
+
+# Verifica se o arquivo JSON existe
+if [ ! -f "$JSON_FILE" ]; then
+  echo "Erro: Arquivo JSON de exemplo não encontrado em $JSON_FILE"
+  exit 1
+fi
+
+echo "Enviando requisição POST para: $WEBHOOK_URL"
+echo "Usando dados do arquivo: $JSON_FILE"
+
+# Envia a requisição POST usando curl
+curl -X POST \
+     -H "Content-Type: application/json" \
+     -d "@$JSON_FILE" \
+     "$WEBHOOK_URL"
+
+echo "" # Nova linha para melhor formatação da saída
+echo "Requisição enviada. Verifique os logs do seu servidor/Vercel para a resposta."
+
+echo -e "\n\n"
 
 # Teste 1: Atendimento finalizado
 echo "📞 Teste 1: Atendimento finalizado"

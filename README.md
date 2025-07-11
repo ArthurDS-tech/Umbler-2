@@ -1,30 +1,71 @@
-# Next.js Backend Setup
+# Sistema de Atendimento
 
-*Automatically synced with your [v0.dev](https://v0.dev) deployments*
+Este é um dashboard para gerenciar atendimentos recebidos via webhook, com foco em integração com plataformas como a Umbler.
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/arthurs-projects-9eaa30c1/v0-next-js-backend-setup)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.dev-black?style=for-the-badge)](https://v0.dev/chat/projects/SYlfpRR8DDI)
+## Funcionalidades
 
-## Overview
+- **Dashboard de Métricas:** Visão geral de atendimentos totais, em andamento, finalizados e clientes únicos.
+- **Tabela de Atendimentos:** Detalhes dos atendimentos recentes com paginação e histórico de mensagens.
+- **Exportação de Dados:** Exporte dados de atendimentos para CSV por diferentes períodos.
+- **Modo Escuro:** Suporte a tema claro e escuro.
+- **Webhook Integrado:** Recebe e processa dados de webhooks (ex: Umbler) e os salva no Supabase.
 
-This repository will stay in sync with your deployed chats on [v0.dev](https://v0.dev).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.dev](https://v0.dev).
+## Tecnologias Utilizadas
 
-## Deployment
+- Next.js (App Router)
+- React
+- Tailwind CSS
+- shadcn/ui
+- Supabase (para banco de dados)
 
-Your project is live at:
+## Configuração
 
-**[https://vercel.com/arthurs-projects-9eaa30c1/v0-next-js-backend-setup](https://vercel.com/arthurs-projects-9eaa30c1/v0-next-js-backend-setup)**
+### 1. Variáveis de Ambiente
 
-## Build your app
+Certifique-se de ter as seguintes variáveis de ambiente configuradas no seu projeto Vercel ou arquivo `.env.local`:
 
-Continue building your app on:
+- `SUPABASE_URL`: URL do seu projeto Supabase.
+- `SUPABASE_ANON_KEY`: Chave `anon` pública do seu projeto Supabase.
+- `SUPABASE_SERVICE_ROLE_KEY`: Chave `service_role` do seu projeto Supabase (usada em Server Actions/API Routes).
 
-**[https://v0.dev/chat/projects/SYlfpRR8DDI](https://v0.dev/chat/projects/SYlfpRR8DDI)**
+### 2. Configuração do Banco de Dados (Supabase)
 
-## How It Works
+Execute o script SQL em `scripts/create-table.sql` no seu banco de dados Supabase para criar a tabela `atendimentos`.
 
-1. Create and modify your project using [v0.dev](https://v0.dev)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
+\`\`\`sql
+CREATE TABLE public.atendimentos (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    nome text,
+    telefone text,
+    respondeu boolean DEFAULT true,
+    status text,
+    data_inicio timestamp with time zone,
+    data_fim timestamp with time zone,
+    mensagens jsonb,
+    mensagem_limpa text,
+    criado_em timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT atendimentos_pkey PRIMARY KEY (id)
+);
+\`\`\`
+
+### 3. Configuração do Webhook
+
+Configure o webhook na sua plataforma (ex: Umbler) para enviar requisições `POST` para o endpoint:
+
+`[SUA_URL_DE_DEPLOY]/api/webhook`
+
+Substitua `[SUA_URL_DE_DEPLOY]` pela URL do seu deploy no Vercel (ex: `https://seu-projeto.vercel.app`).
+
+### 4. Executando Localmente
+
+1. Clone o repositório.
+2. Instale as dependências: `npm install` ou `yarn install`
+3. Inicie o servidor de desenvolvimento: `npm run dev` ou `yarn dev`
+
+## Deploy
+
+Este projeto é otimizado para deploy na Vercel. Basta conectar seu repositório GitHub à Vercel, e ele será automaticamente deployado.
+
+## Solução de Problemas
+
+Se você não estiver vendo os dados na tabela, verifique os logs do seu deploy no Vercel para o endpoint `/api/webhook`. Eles fornecerão informações detalhadas sobre os dados recebidos e quaisquer erros de inserção no Supabase.

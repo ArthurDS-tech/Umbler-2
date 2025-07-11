@@ -5,45 +5,24 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-/**
- * Limpa tags HTML e códigos especiais de uma string
- * @param htmlString - String que pode conter HTML
- * @returns String limpa apenas com texto
- */
 export function cleanHtmlMessage(htmlString: string): string {
   if (!htmlString) return ""
 
-  // Remove tags HTML
-  let cleaned = htmlString.replace(/<[^>]*>/g, "")
+  // Create a new DOMParser
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(htmlString, "text/html")
 
-  // Decodifica entidades HTML comuns
-  const htmlEntities: { [key: string]: string } = {
-    "&amp;": "&",
-    "&lt;": "<",
-    "&gt;": ">",
-    "&quot;": '"',
-    "&#39;": "'",
-    "&nbsp;": " ",
-    "&apos;": "'",
-    "&cent;": "¢",
-    "&pound;": "£",
-    "&yen;": "¥",
-    "&euro;": "€",
-    "&copy;": "©",
-    "&reg;": "®",
-  }
+  // Get the text content, which strips HTML tags
+  let textContent = doc.body.textContent || ""
 
-  // Substitui entidades HTML
-  Object.keys(htmlEntities).forEach((entity) => {
-    const regex = new RegExp(entity, "g")
-    cleaned = cleaned.replace(regex, htmlEntities[entity])
-  })
+  // Replace common HTML entities
+  textContent = textContent.replace(/&amp;/g, "&")
+  textContent = textContent.replace(/&lt;/g, "<")
+  textContent = textContent.replace(/&gt;/g, ">")
+  textContent = textContent.replace(/&quot;/g, '"')
+  textContent = textContent.replace(/&#039;/g, "'")
+  textContent = textContent.replace(/&nbsp;/g, " ")
 
-  // Remove quebras de linha excessivas e espaços extras
-  cleaned = cleaned
-    .replace(/\n\s*\n/g, "\n") // Remove quebras de linha duplas
-    .replace(/\s+/g, " ") // Remove espaços extras
-    .trim() // Remove espaços no início e fim
-
-  return cleaned
+  // Trim whitespace
+  return textContent.trim()
 }

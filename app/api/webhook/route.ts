@@ -1,238 +1,118 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase"
 import { cleanHtmlMessage } from "@/lib/utils"
 
-// Interface para dados do Umbler (formato mais flexível)
-interface UmblerWebhookData {
-  // Campos obrigatórios
-  nome?: string
-  name?: string
-  customer_name?: string
-  telefone?: string
-  phone?: string
-  customer_phone?: string
-  status?: string
-  state?: string
+// Helper function to normalize incoming webhook data
+function normalizeUmblerData(rawBody: any) {
+  let nome = "Cliente não identificado"
+  let telefone = "Não informado"
+  let mensagem = "Mensagem não disponível"
+  let status = "desconhecido"
+  let data_inicio = new Date().toISOString()
+  let data_fim = null
+  let mensagens: { hora: string; conteudo: string }[] = []
+  const id = rawBody.id || rawBody.chatId || rawBody.conversationId || crypto.randomUUID()
 
-  // Campos opcionais
-  respondeu?: boolean
-  answered?: boolean
-  data_inicio?: string
-  start_time?: string
-  created_at?: string
-  data_fim?: string
-  end_time?: string
-  finished_at?: string
-  mensagens?: Array<{
-    hora?: string
-    time?: string
-    timestamp?: string
-    conteudo?: string
-    content?: string
-    message?: string
-    text?: string
-  }>
-  messages?: Array<any>
-  mensagem?: string
-  message?: string
-  description?: string
+  // Try to extract name
+  if (rawBody.name) nome = rawBody.name
+  else if (rawBody.customer_name) nome = rawBody.customer_name
+  else if (rawBody.contact && rawBody.contact.name) nome = rawBody.contact.name
+  else if (rawBody.chat && rawBody.chat.contact && rawBody.chat.contact.name) nome = rawBody.chat.contact.name
+  else if (rawBody.conversation && rawBody.conversation.contact && rawBody.conversation.contact.name)
+    nome = rawBody.conversation.contact.name
 
-  // Campos extras que o Umbler pode enviar
-  id?: string
-  ticket_id?: string
-  agent_name?: string
-  department?: string
-  priority?: string
-  tags?: string[]
+  // Try to extract phone
+  if (rawBody.phone) telefone = rawBody.phone
+  else if (rawBody.customer_phone) telefone = rawBody.customer_phone
+  else if (rawBody.contact && rawBody.contact.phoneNumber) telefone = rawBody.contact.phoneNumber
+  else if (rawBody.chat && rawBody.chat.contact && rawBody.chat.contact.phoneNumber)
+    telefone = rawBody.chat.contact.phoneNumber
+  else if (rawBody.conversation && rawBody.conversation.contact && rawBody.conversation.contact.phoneNumber)
+    telefone = rawBody.conversation.contact.phoneNumber
 
-  // Para debug - capturar dados brutos
-  [key: string]: any
-}
-
-function normalizeUmblerData(data: UmblerWebhookData) {
-  // Normalizar nome
-  const nome = data.nome || data.name || data.customer_name || "Cliente não identificado"
-
-  // Normalizar telefone
-  const telefone = data.telefone || data.phone || data.customer_phone || "Não informado"
-
-  // Normalizar status
-  let status = data.status || data.state || "desconhecido"
-  status = status.toLowerCase()
-
-  // Mapear possíveis status do Umbler para nossos status
-  const statusMap: { [key: string]: string } = {
-    open: "em andamento",
-    opened: "em andamento",
-    pending: "em andamento",
-    in_progress: "em andamento",
-    closed: "finalizado",
-    resolved: "finalizado",
-    finished: "finalizado",
-    completed: "finalizado",
-    abandoned: "abandonado",
-    timeout: "abandonado",
-    cancelled: "abandonado",
+  // Try to extract message
+  if (rawBody.message) mensagem = rawBody.message
+  else if (rawBody.description) mensagem = rawBody.description
+  else if (rawBody.chat && rawBody.chat.lastMessage && rawBody.chat.lastMessage.content)
+    mensagem = rawBody.chat.lastMessage.content
+  else if (rawBody.conversation && rawBody.conversation.lastMessage && rawBody.conversation.lastMessage.content)
+    mensagem = rawBody.conversation.lastMessage.content
+  else if (rawBody.messages && rawBody.messages.length > 0) {
+    const lastMessage = rawBody.messages[rawBody.messages.length - 1]
+    if (lastMessage.content) mensagem = lastMessage.content
   }
 
-  const normalizedStatus = statusMap[status] || status
+  // Try to extract status
+  if (rawBody.status) status = rawBody.status
+  else if (rawBody.chat && rawBody.chat.status) status = rawBody.chat.status
+  else if (rawBody.conversation && rawBody.conversation.status) status = rawBody.conversation.status
 
-  // Normalizar respondeu
-  const respondeu = data.respondeu ?? data.answered ?? true
+  // Try to extract timestamps
+  if (rawBody.createdAt) data_inicio = new Date(rawBody.createdAt).toISOString()
+  else if (rawBody.chat && rawBody.chat.createdAt) data_inicio = new Date(rawBody.chat.createdAt).toISOString()
+  else if (rawBody.conversation && rawBody.conversation.createdAt)
+    data_inicio = new Date(rawBody.conversation.createdAt).toISOString()
 
-  // Normalizar datas
-  const data_inicio = data.data_inicio || data.start_time || data.created_at || new Date().toISOString()
-  const data_fim = data.data_fim || data.end_time || data.finished_at || new Date().toISOString()
+  if (rawBody.endedAt) data_fim = new Date(rawBody.endedAt).toISOString()
+  else if (rawBody.chat && rawBody.chat.endedAt) data_fim = new Date(rawBody.chat.endedAt).toISOString()
+  else if (rawBody.conversation && rawBody.conversation.endedAt)
+    data_fim = new Date(rawBody.conversation.endedAt).toISOString()
 
-  // Normalizar mensagens
-  let mensagens: Array<{ hora: string; conteudo: string }> = []
-
-  if (data.mensagens && Array.isArray(data.mensagens)) {
-    mensagens = data.mensagens.map((msg) => ({
-      hora: msg.hora || msg.time || msg.timestamp || new Date().toLocaleTimeString(),
-      conteudo: msg.conteudo || msg.content || msg.message || msg.text || "",
+  // Extract messages history
+  if (rawBody.messages && Array.isArray(rawBody.messages)) {
+    mensagens = rawBody.messages.map((msg: any) => ({
+      hora: msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("pt-BR") : "N/A",
+      conteudo: msg.content || "Mensagem vazia",
     }))
-  } else if (data.messages && Array.isArray(data.messages)) {
-    mensagens = data.messages.map((msg: any) => ({
-      hora: msg.hora || msg.time || msg.timestamp || new Date().toLocaleTimeString(),
-      conteudo: msg.conteudo || msg.content || msg.message || msg.text || JSON.stringify(msg),
+  } else if (rawBody.chat && rawBody.chat.messages && Array.isArray(rawBody.chat.messages)) {
+    mensagens = rawBody.chat.messages.map((msg: any) => ({
+      hora: msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("pt-BR") : "N/A",
+      conteudo: msg.content || "Mensagem vazia",
     }))
+  } else if (rawBody.conversation && rawBody.conversation.messages && Array.isArray(rawBody.conversation.messages)) {
+    mensagens = rawBody.conversation.messages.map((msg: any) => ({
+      hora: msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("pt-BR") : "N/A",
+      conteudo: msg.content || "Mensagem vazia",
+    }))
+  } else {
+    // If no message array, use the single message found
+    mensagens = [{ hora: new Date().toLocaleTimeString("pt-BR"), conteudo: mensagem }]
   }
-
-  // Normalizar mensagem principal
-  const mensagem = data.mensagem || data.message || data.description || ""
 
   return {
+    id,
     nome,
     telefone,
-    respondeu,
-    status: normalizedStatus,
+    status,
     data_inicio,
     data_fim,
     mensagens,
-    mensagem,
-    // Dados extras para debug
-    dados_originais: data,
+    mensagem_limpa: cleanHtmlMessage(mensagem),
+    criado_em: new Date().toISOString(), // Timestamp for when it was created in our DB
   }
 }
 
-export async function POST(request: NextRequest) {
-  console.log("--- INÍCIO DO PROCESSAMENTO DO WEBHOOK ---")
+export async function POST(request: Request) {
+  const supabase = createClient()
+
   try {
-    // Logar cabeçalhos da requisição para debug
-    console.log("HEADERS RECEBIDOS:", JSON.stringify(Object.fromEntries(request.headers.entries()), null, 2))
-
-    // Parse do body da requisição
-    const rawBody: UmblerWebhookData = await request.json()
-
+    const rawBody = await request.json()
     console.log("📥 Dados recebidos do Umbler:", JSON.stringify(rawBody, null, 2))
 
-    // Normalizar os dados
     const normalizedData = normalizeUmblerData(rawBody)
-
     console.log("🔄 Dados normalizados:", JSON.stringify(normalizedData, null, 2))
 
-    // Validação básica dos dados obrigatórios
-    if (!normalizedData.nome || !normalizedData.telefone) {
-      console.error("❌ ERRO: Campos obrigatórios ausentes:", {
-        nome: normalizedData.nome,
-        telefone: normalizedData.telefone,
-      })
-      return NextResponse.json(
-        {
-          error: "Campos obrigatórios: nome e telefone",
-          received_data: rawBody,
-        },
-        { status: 400 },
-      )
-    }
-
-    // Limpar a mensagem HTML
-    const mensagemLimpa = cleanHtmlMessage(normalizedData.mensagem)
-    console.log("🧹 Mensagem HTML limpa:", mensagemLimpa)
-
-    // Criar cliente Supabase
-    const supabase = createClient()
-    console.log("🔗 Cliente Supabase criado.")
-
-    // Inserir dados na tabela atendimentos
-    console.log("💾 Tentando inserir dados no Supabase...")
-    const { data, error } = await supabase
-      .from("atendimentos")
-      .insert({
-        nome: normalizedData.nome,
-        telefone: normalizedData.telefone,
-        respondeu: normalizedData.respondeu,
-        status: normalizedData.status,
-        data_inicio: normalizedData.data_inicio,
-        data_fim: normalizedData.data_fim,
-        mensagens: normalizedData.mensagens,
-        mensagem_limpa: mensagemLimpa,
-      })
-      .select()
+    const { data, error } = await supabase.from("atendimentos").insert([normalizedData])
 
     if (error) {
-      console.error("❌ ERRO AO INSERIR NO SUPABASE:", {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
-      })
-      return NextResponse.json(
-        {
-          error: "Erro interno do servidor ao salvar atendimento",
-          details: error.message,
-          received_data: rawBody,
-        },
-        { status: 500 },
-      )
+      console.error("❌ Erro ao inserir no Supabase:", error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    console.log("✅ Atendimento salvo com sucesso:", data?.[0])
-
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Atendimento salvo com sucesso",
-        data: data?.[0],
-        normalized_data: normalizedData,
-      },
-      { status: 201 },
-    )
+    console.log("✅ Dados inseridos com sucesso no Supabase:", data)
+    return NextResponse.json({ message: "Webhook recebido e processado com sucesso!", data }, { status: 200 })
   } catch (error) {
-    console.error("💥 ERRO GERAL NO WEBHOOK:", error instanceof Error ? error.message : JSON.stringify(error))
-    console.error("STACK TRACE:", error instanceof Error ? error.stack : "N/A")
-
-    return NextResponse.json(
-      {
-        error: "Erro ao processar webhook",
-        details: error instanceof Error ? error.message : "Erro desconhecido",
-      },
-      { status: 500 },
-    )
-  } finally {
-    console.log("--- FIM DO PROCESSAMENTO DO WEBHOOK ---")
+    console.error("🚨 Erro no processamento do webhook:", error)
+    return NextResponse.json({ error: "Erro interno do servidor ao processar o webhook." }, { status: 500 })
   }
-}
-
-// Método GET para testar se a rota está funcionando
-export async function GET() {
-  console.log("--- REQUISIÇÃO GET NO WEBHOOK ---")
-  return NextResponse.json({
-    message: "Webhook endpoint está funcionando",
-    timestamp: new Date().toISOString(),
-    url: "https://v0-next-js-backend-setup-kappa.vercel.app/api/webhook", // Verifique se esta URL está correta no seu deploy
-    methods: ["POST", "GET"],
-    expected_fields: {
-      required: ["nome/name/customer_name", "telefone/phone/customer_phone"],
-      optional: [
-        "status",
-        "respondeu/answered",
-        "data_inicio/start_time",
-        "data_fim/end_time",
-        "mensagens/messages",
-        "mensagem/message",
-      ],
-    },
-  })
 }

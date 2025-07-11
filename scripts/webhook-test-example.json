@@ -1,31 +1,28 @@
 {
-  "nome": "João Silva",
-  "telefone": "+5511999887766",
-  "respondeu": true,
-  "status": "finalizado",
-  "data_inicio": "2024-01-15T10:30:00.000Z",
-  "data_fim": "2024-01-15T10:45:00.000Z",
-  "mensagens": [
+  "id": "chat_1234567890",
+  "status": "open",
+  "createdAt": "2024-07-10T10:00:00Z",
+  "endedAt": null,
+  "contact": {
+    "name": "João Silva",
+    "phoneNumber": "+5511987654321",
+    "email": "joao.silva@example.com"
+  },
+  "lastMessage": {
+    "content": "Olá, gostaria de saber mais sobre seus serviços de marketing digital."
+  },
+  "messages": [
     {
-      "hora": "10:30:15",
-      "conteudo": "Olá, preciso de ajuda com meu pedido"
+      "createdAt": "2024-07-10T10:00:00Z",
+      "content": "Olá, gostaria de saber mais sobre seus serviços de marketing digital."
     },
     {
-      "hora": "10:32:20",
-      "conteudo": "Claro! Qual é o número do seu pedido?"
-    },
-    {
-      "hora": "10:33:45",
-      "conteudo": "É o pedido #12345"
-    },
-    {
-      "hora": "10:35:10",
-      "conteudo": "Encontrei seu pedido. Ele está sendo preparado e será enviado hoje."
-    },
-    {
-      "hora": "10:36:30",
-      "conteudo": "Perfeito! Muito obrigado pela ajuda."
+      "createdAt": "2024-07-10T10:05:00Z",
+      "content": "Recebemos sua mensagem. Em breve um de nossos consultores entrará em contato."
     }
   ],
-  "mensagem": "<p>Cliente <strong>João Silva</strong> entrou em contato via <em>WhatsApp</em> solicitando informações sobre o pedido #12345.</p><br><p>Atendimento realizado com sucesso. Cliente satisfeito com a resposta.</p><div>Status: <span style='color: green;'>Resolvido</span></div>"
+  "agent": {
+    "name": "Atendente Virtual"
+  },
+  "tags": ["novo_lead", "marketing"]
 }
