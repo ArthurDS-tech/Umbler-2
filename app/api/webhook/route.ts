@@ -1,141 +1,76 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase"
-import { cleanHtmlMessage } from "@/lib/utils"
 
-// Helper function to normalize incoming webhook data from Umbler
-function normalizeUmblerData(rawBody: any) {
-  let nome = "Cliente não identificado"
-  let telefone = "Não informado"
-  let mensagem = "Mensagem não disponível"
-  let status = "desconhecido"
-  let data_inicio = new Date().toISOString()
-  let data_fim = null
-  let mensagens: { hora: string; conteudo: string }[] = []
-  let tags: string[] = []
-  const id = rawBody.id || rawBody.chatId || rawBody.conversationId || crypto.randomUUID()
+// Adicionar os cabeçalhos CORS e lidar com requisições OPTIONS
 
-  // Extract name
-  if (rawBody.name) nome = rawBody.name
-  else if (rawBody.customer_name) nome = rawBody.customer_name
-  else if (rawBody.contact && rawBody.contact.name) nome = rawBody.contact.name
-  else if (rawBody.chat && rawBody.chat.contact && rawBody.chat.contact.name) nome = rawBody.chat.contact.name
-  else if (rawBody.conversation && rawBody.conversation.contact && rawBody.conversation.contact.name)
-    nome = rawBody.conversation.contact.name
-
-  // Extract phone
-  if (rawBody.phone) telefone = rawBody.phone
-  else if (rawBody.customer_phone) telefone = rawBody.customer_phone
-  else if (rawBody.contact && rawBody.contact.phoneNumber) telefone = rawBody.contact.phoneNumber
-  else if (rawBody.chat && rawBody.chat.contact && rawBody.chat.contact.phoneNumber)
-    telefone = rawBody.chat.contact.phoneNumber
-  else if (rawBody.conversation && rawBody.conversation.contact && rawBody.conversation.contact.phoneNumber)
-    telefone = rawBody.conversation.contact.phoneNumber
-
-  // Extract message
-  if (rawBody.message) mensagem = rawBody.message
-  else if (rawBody.description) mensagem = rawBody.description
-  else if (rawBody.chat && rawBody.chat.lastMessage && rawBody.chat.lastMessage.content)
-    mensagem = rawBody.chat.lastMessage.content
-  else if (rawBody.conversation && rawBody.conversation.lastMessage && rawBody.conversation.lastMessage.content)
-    mensagem = rawBody.conversation.lastMessage.content
-  else if (rawBody.messages && rawBody.messages.length > 0) {
-    const lastMessage = rawBody.messages[rawBody.messages.length - 1]
-    if (lastMessage.content) mensagem = lastMessage.content
+// Antes da função POST, adicione uma função OPTIONS
+export async function OPTIONS() {
+  const headers = {
+    "Access-Control-Allow-Origin": "*", // Ou 'https://blog.grandeflorianopolis.autofacilpagamentos.com.br' para restringir
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
   }
-
-  // Extract status
-  if (rawBody.status) status = rawBody.status
-  else if (rawBody.chat && rawBody.chat.status) status = rawBody.chat.status
-  else if (rawBody.conversation && rawBody.conversation.status) status = rawBody.conversation.status
-
-  // Extract tags from Umbler
-  if (rawBody.tags && Array.isArray(rawBody.tags)) {
-    tags = rawBody.tags
-  } else if (rawBody.chat && rawBody.chat.tags && Array.isArray(rawBody.chat.tags)) {
-    tags = rawBody.chat.tags
-  } else if (rawBody.conversation && rawBody.conversation.tags && Array.isArray(rawBody.conversation.tags)) {
-    tags = rawBody.conversation.tags
-  } else if (rawBody.labels && Array.isArray(rawBody.labels)) {
-    tags = rawBody.labels
-  }
-
-  // Extract timestamps
-  if (rawBody.createdAt) data_inicio = new Date(rawBody.createdAt).toISOString()
-  else if (rawBody.chat && rawBody.chat.createdAt) data_inicio = new Date(rawBody.chat.createdAt).toISOString()
-  else if (rawBody.conversation && rawBody.conversation.createdAt)
-    data_inicio = new Date(rawBody.conversation.createdAt).toISOString()
-
-  if (rawBody.endedAt) data_fim = new Date(rawBody.endedAt).toISOString()
-  else if (rawBody.chat && rawBody.chat.endedAt) data_fim = new Date(rawBody.chat.endedAt).toISOString()
-  else if (rawBody.conversation && rawBody.conversation.endedAt)
-    data_fim = new Date(rawBody.conversation.endedAt).toISOString()
-
-  // Extract messages history
-  if (rawBody.messages && Array.isArray(rawBody.messages)) {
-    mensagens = rawBody.messages.map((msg: any) => ({
-      hora: msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("pt-BR") : "N/A",
-      conteudo: msg.content || "Mensagem vazia",
-    }))
-  } else if (rawBody.chat && rawBody.chat.messages && Array.isArray(rawBody.chat.messages)) {
-    mensagens = rawBody.chat.messages.map((msg: any) => ({
-      hora: msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("pt-BR") : "N/A",
-      conteudo: msg.content || "Mensagem vazia",
-    }))
-  } else if (rawBody.conversation && rawBody.conversation.messages && Array.isArray(rawBody.conversation.messages)) {
-    mensagens = rawBody.conversation.messages.map((msg: any) => ({
-      hora: msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("pt-BR") : "N/A",
-      conteudo: msg.content || "Mensagem vazia",
-    }))
-  } else {
-    mensagens = [{ hora: new Date().toLocaleTimeString("pt-BR"), conteudo: mensagem }]
-  }
-
-  return {
-    id,
-    nome,
-    telefone,
-    status,
-    data_inicio,
-    data_fim,
-    mensagens,
-    tags,
-    mensagem_limpa: cleanHtmlMessage(mensagem),
-    criado_em: new Date().toISOString(),
-  }
+  return new NextResponse(null, { status: 200, headers })
 }
 
+// Webhook para receber dados do WordPress/Elementor
 export async function POST(request: Request) {
   const supabase = createClient()
+  const headers = {
+    "Access-Control-Allow-Origin": "*", // Ou 'https://blog.grandeflorianopolis.autofacilpagamentos.com.br'
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  }
 
   try {
     const rawBody = await request.json()
-    console.log("📥 Dados recebidos da Umbler:", JSON.stringify(rawBody, null, 2))
+    console.log("📊 Dados recebidos do WordPress:", JSON.stringify(rawBody, null, 2))
 
-    const normalizedData = normalizeUmblerData(rawBody)
-    console.log("🔄 Dados normalizados:", JSON.stringify(normalizedData, null, 2))
-
-    const { data, error } = await supabase.from("atendimentos").insert([normalizedData])
-
-    if (error) {
-      console.error("❌ Erro ao inserir no Supabase:", error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    // Normalizar dados do WordPress
+    const wordpressData = {
+      id: rawBody.id || crypto.randomUUID(),
+      url_origem: rawBody.url || rawBody.page_url || "https://blog.grandeflorianopolis.autofacilpagamentos.com.br/",
+      ip_visitante: rawBody.ip || rawBody.visitor_ip || "N/A",
+      user_agent: rawBody.user_agent || rawBody.userAgent || "N/A",
+      pagina_visitada: rawBody.page || rawBody.page_title || rawBody.title || "Página inicial",
+      tempo_permanencia: rawBody.time_spent || rawBody.duration || 0,
+      origem_trafego: rawBody.source || rawBody.traffic_source || rawBody.utm_source || "direto",
+      campanha: rawBody.campaign || rawBody.utm_campaign || null,
+      meio: rawBody.medium || rawBody.utm_medium || null,
+      termo: rawBody.term || rawBody.utm_term || null,
+      dispositivo: rawBody.device || rawBody.device_type || "desktop",
+      navegador: rawBody.browser || "N/A",
+      localizacao: rawBody.location || rawBody.city || "N/A",
+      converteu: rawBody.converted || false,
+      acao_realizada: rawBody.action || rawBody.event || "visualizacao",
+      timestamp_visita: rawBody.timestamp || new Date().toISOString(),
+      criado_em: new Date().toISOString(),
     }
 
-    console.log("✅ Dados inseridos com sucesso no Supabase:", data)
+    console.log("🔄 Dados WordPress normalizados:", JSON.stringify(wordpressData, null, 2))
+
+    const { data, error } = await supabase.from("visitantes_site").insert([wordpressData])
+
+    if (error) {
+      console.error("❌ Erro ao inserir dados do WordPress:", error)
+      return NextResponse.json({ error: error.message }, { status: 500, headers })
+    }
+
+    console.log("✅ Dados do WordPress inseridos com sucesso:", data)
     return NextResponse.json(
       {
-        message: "Webhook da Umbler recebido e processado com sucesso!",
+        message: "Dados do WordPress recebidos e processados com sucesso!",
         data,
       },
-      { status: 200 },
+      { status: 200, headers },
     )
   } catch (error) {
-    console.error("🚨 Erro no processamento do webhook da Umbler:", error)
+    console.error("🚨 Erro no processamento do webhook WordPress:", error)
     return NextResponse.json(
       {
-        error: "Erro interno do servidor ao processar webhook da Umbler.",
+        error: "Erro interno do servidor ao processar webhook do WordPress.",
       },
-      { status: 500 },
+      { status: 500, headers },
     )
   }
 }
